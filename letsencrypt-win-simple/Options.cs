@@ -41,6 +41,12 @@ namespace LetsEncrypt.ACME.Simple
         [Option(HelpText = "Certificates per site instead of per host")]
         public bool San { get; set; }
 
+        [Option(HelpText = "The hostname of the certificate")]
+        public string HostName { get; set; }
+
+        [Option(HelpText = "A comma separated list of host names to manually get a certificate for. --webroot must also be set.")]
+        public string SanHostList { get; set; }
+
         [Option(HelpText = "Keep existing HTTPS bindings, and certificates")]
         public bool KeepExisting { get; set; }
 

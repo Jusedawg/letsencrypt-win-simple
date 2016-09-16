@@ -24,7 +24,7 @@ namespace LetsEncrypt.ACME.Simple
     {
         private const string ClientName = "letsencrypt-win-simple";
         private static string _certificateStore = "WebHosting";
-        public static float RenewalPeriod = 60;
+        public static float RenewalPeriod = 75;
         public static bool CentralSsl = false;
         public static string BaseUri { get; set; }
         private static string _configPath;
@@ -89,8 +89,16 @@ namespace LetsEncrypt.ACME.Simple
                             LoadRegistrationFromFile(registrationPath);
                         else
                         {
-                            Console.Write("Enter an email address (not public, used for renewal fail notices): ");
-                            var email = Console.ReadLine().Trim();
+                            var email = string.Empty;
+                            if (string.IsNullOrEmpty(Properties.Settings.Default.FailNoticeEmail))
+                            {
+                                Console.Write("Enter an email address (not public, used for renewal fail notices): ");
+                                email = Console.ReadLine().Trim();
+                            }
+                            else
+                            {
+                                email = Properties.Settings.Default.FailNoticeEmail;
+                            }
 
                             string[] contacts = GetContacts(email);
 
@@ -98,9 +106,12 @@ namespace LetsEncrypt.ACME.Simple
 
                             if (!Options.AcceptTos && !Options.Renew)
                             {
-                                Console.WriteLine($"Do you agree to {registration.TosLinkUri}? (Y/N) ");
-                                if (!PromptYesNo())
-                                    return;
+                                if (!Properties.Settings.Default.AgreeToTerms)
+                                {
+                                    Console.WriteLine($"Do you agree to {registration.TosLinkUri}? (Y/N) ");
+                                    if (!PromptYesNo())
+                                        return; ;
+                                }                                
                             }
 
                             UpdateRegistration();
@@ -119,25 +130,35 @@ namespace LetsEncrypt.ACME.Simple
                         WriteBindings(targets);
 
                         Console.WriteLine();
-                        PrintMenuForPlugins();
 
-                        if (string.IsNullOrEmpty(Options.ManualHost))
+                        var command = string.Empty;
+                        if (string.IsNullOrEmpty(Properties.Settings.Default.PluginToRun))
                         {
-                            Console.WriteLine(" A: Get certificates for all hosts");
-                            Console.WriteLine(" Q: Quit");
-                            Console.Write("Which host do you want to get a certificate for: ");
-                            var command = ReadCommandFromConsole();
-                            switch (command)
+                            PrintMenuForPlugins();
+
+                            if (string.IsNullOrEmpty(Options.ManualHost))
                             {
-                                case "a":
-                                    GetCertificatesForAllHosts(targets);
-                                    break;
-                                case "q":
-                                    return;
-                                default:
-                                    ProcessDefaultCommand(targets, command);
-                                    break;
+                                Console.WriteLine(" A: Get certificates for all hosts");
+                                Console.WriteLine(" Q: Quit");
+                                Console.Write("Which host do you want to get a certificate for: ");
+                                command = ReadCommandFromConsole();
+                                switch (command)
+                                {
+                                    case "a":
+                                        GetCertificatesForAllHosts(targets);
+                                        break;
+                                    case "q":
+                                        return;
+                                    default:
+                                        ProcessDefaultCommand(targets, command);
+                                        break;
+                                }
                             }
+                        }
+                        else
+                        {
+                            command = Properties.Settings.Default.PluginToRun;
+                            ProcessDefaultCommand(targets, command);
                         }
                     }
                 }
@@ -160,8 +181,11 @@ namespace LetsEncrypt.ACME.Simple
                 Console.ResetColor();
             }
 
-            Console.WriteLine("Press enter to continue.");
-            Console.ReadLine();
+            if (!Properties.Settings.Default.AutoContinue)
+            {
+                Console.WriteLine("Press enter to continue.");
+                Console.ReadLine();
+            }
         }
 
         private static bool TryParseOptions(string[] args)
@@ -582,10 +606,13 @@ namespace LetsEncrypt.ACME.Simple
 
                 if (Options.Test && !Options.Renew)
                 {
-                    Console.WriteLine(
+                    if (!Properties.Settings.Default.InstallCertificateStore)
+                    {
+                        Console.WriteLine(
                         $"\nDo you want to install the .pfx into the Certificate Store/ Central SSL Store? (Y/N) ");
-                    if (!PromptYesNo())
-                        return;
+                        if (!PromptYesNo())
+                            return;
+                    }
                 }
 
                 if (!CentralSsl)
@@ -596,9 +623,13 @@ namespace LetsEncrypt.ACME.Simple
                     InstallCertificate(binding, pfxFilename, out store, out certificate);
                     if (Options.Test && !Options.Renew)
                     {
-                        Console.WriteLine($"\nDo you want to add/update the certificate to your server software? (Y/N) ");
-                        if (!PromptYesNo())
-                            return;
+                        if (!Properties.Settings.Default.UpdateServerSoftware)
+                        {
+                            Console.WriteLine($"\nDo you want to add/update the certificate to your server software? (Y/N) ");
+                            if (!PromptYesNo())
+                                return;
+                        }
+                        
                     }
                     Log.Information("Installing Non-Central SSL Certificate in server software");
                     binding.Plugin.Install(binding, pfxFilename, store, certificate);
@@ -616,10 +647,13 @@ namespace LetsEncrypt.ACME.Simple
 
                 if (Options.Test && !Options.Renew)
                 {
-                    Console.WriteLine(
+                    if (!Properties.Settings.Default.AutoRenew)
+                    {
+                        Console.WriteLine(
                         $"\nDo you want to automatically renew this certificate in {RenewalPeriod} days? This will add a task scheduler task. (Y/N) ");
-                    if (!PromptYesNo())
-                        return;
+                        if (!PromptYesNo())
+                            return;
+                    }
                 }
 
                 if (!Options.Renew)
@@ -926,9 +960,13 @@ namespace LetsEncrypt.ACME.Simple
                 if (_settings.ScheduledTaskName == taskName)
                 {
                     addTask = false;
-                    Console.WriteLine($"\nDo you want to replace the existing {taskName} task? (Y/N) ");
-                    if (!PromptYesNo())
-                        return;
+                    if (!Properties.Settings.Default.TaskOverwrite)
+                    {
+                        Console.WriteLine($"\nDo you want to replace the existing {taskName} task? (Y/N) ");
+                        if (!PromptYesNo())
+                            return;
+                    }
+                    
                     addTask = true;
                     Console.WriteLine($" Deleting existing Task {taskName} from Windows Task Scheduler.");
                     Log.Information("Deleting existing Task {taskName} from Windows Task Scheduler.", taskName);
@@ -946,7 +984,7 @@ namespace LetsEncrypt.ACME.Simple
 
                     var now = DateTime.Now;
                     var runtime = new DateTime(now.Year, now.Month, now.Day, 9, 0, 0);
-                    task.Triggers.Add(new DailyTrigger { DaysInterval = 1, StartBoundary = runtime });
+                    task.Triggers.Add(new DailyTrigger { DaysInterval = (short)RenewalPeriod, StartBoundary = runtime });
 
                     var currentExec = Assembly.GetExecutingAssembly().Location;
 
@@ -957,23 +995,51 @@ namespace LetsEncrypt.ACME.Simple
                     task.Principal.RunLevel = TaskRunLevel.Highest; // need admin
                     Log.Debug("{@task}", task);
 
-                    Console.WriteLine($"\nDo you want to specify the user the task will run as? (Y/N) ");
-                    if (PromptYesNo())
+                    var specifyUser = false;
+                    var username = string.Empty;
+                    var password = string.Empty;
+                    if (Properties.Settings.Default.SpecifyTaskUser)
                     {
-                        // Ask for the login and password to allow the task to run 
-                        Console.Write("Enter the username (Domain\\username): ");
-                        var username = Console.ReadLine();
-                        Console.Write("Enter the user's password: ");
-                        var password = ReadPassword();
-                        Log.Debug("Creating task to run as {username}", username);
-                        taskService.RootFolder.RegisterTaskDefinition(taskName, task, TaskCreation.Create, username,
-                            password, TaskLogonType.Password);
+                        if (string.IsNullOrEmpty(Properties.Settings.Default.TaskUser) || string.IsNullOrEmpty(Properties.Settings.Default.TaskPassword))
+                        {
+                            Console.WriteLine($"\nDo you want to specify the user the task will run as? (Y/N) ");
+                            specifyUser = PromptYesNo();
+                            if (specifyUser)
+                            {
+                                // Ask for the login and password to allow the task to run
+                                if (string.IsNullOrEmpty(Properties.Settings.Default.TaskUser))
+                                {
+                                    Console.Write("Enter the username (Domain\\username): ");
+                                    username = Console.ReadLine();
+                                }
+                                else
+                                {
+                                    username = Properties.Settings.Default.TaskUser;
+                                }
+
+                                if (string.IsNullOrEmpty(Properties.Settings.Default.TaskPassword))
+                                {
+                                    Console.Write("Enter the user's password: ");
+                                    password = ReadPassword();
+                                }
+                                else
+                                {
+                                    password = Properties.Settings.Default.TaskPassword;
+                                }
+            
+                                Log.Debug("Creating task to run as {username}", username);
+                                taskService.RootFolder.RegisterTaskDefinition(taskName, task, TaskCreation.Create, username,
+                                    password, TaskLogonType.Password);
+                            }
+                        }
                     }
-                    else
+
+                    if(!specifyUser)
                     {
                         Log.Debug("Creating task to run as current user only when the user is logged on");
                         taskService.RootFolder.RegisterTaskDefinition(taskName, task);
                     }
+                    
                     _settings.ScheduledTaskName = taskName;
                 }
             }

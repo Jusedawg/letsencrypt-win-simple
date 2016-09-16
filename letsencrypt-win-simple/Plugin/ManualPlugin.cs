@@ -99,27 +99,50 @@ namespace LetsEncrypt.ACME.Simple
         {
             if (response == "m")
             {
-                Console.Write("Enter a host name: ");
-                var hostName = Console.ReadLine();
+                var hostName = string.Empty;
+                if (string.IsNullOrEmpty(Program.Options.HostName)) {
+                    Console.Write("Enter a host name: ");
+                    hostName = Console.ReadLine();
+                }
+                else
+                {
+                    hostName = Program.Options.HostName;
+                }
                 string[] alternativeNames = null;
                 List<string> sanList = null;
 
                 if (Program.Options.San)
                 {
-                    Console.Write("Enter all Alternative Names seperated by a comma ");
+                    var sanInput = string.Empty;
+                    if (string.IsNullOrEmpty(Program.Options.SanHostList))
+                    {
+                        Console.Write("Enter all Alternative Names seperated by a comma ");
 
-                    // Copied from http://stackoverflow.com/a/16638000
-                    int BufferSize = 16384;
-                    Stream inputStream = Console.OpenStandardInput(BufferSize);
-                    Console.SetIn(new StreamReader(inputStream, Console.InputEncoding, false, BufferSize));
+                        int BufferSize = 16384;
+                        Stream inputStream = Console.OpenStandardInput(BufferSize);
+                        Console.SetIn(new StreamReader(inputStream, Console.InputEncoding, false, BufferSize));
 
-                    var sanInput = Console.ReadLine();
+                        sanInput = Console.ReadLine();
+                    }
+                    else
+                    {
+                        sanInput = Program.Options.SanHostList;
+                    }
+         
                     alternativeNames = sanInput.Split(',');
                     sanList = new List<string>(alternativeNames);
                 }
 
-                Console.Write("Enter a site path (the web root of the host for http authentication): ");
-                var physicalPath = Console.ReadLine();
+                var physicalPath = string.Empty;
+                if (string.IsNullOrEmpty(Program.Options.WebRoot))
+                {
+                    Console.Write("Enter a site path (the web root of the host for http authentication): ");
+                    physicalPath = Console.ReadLine();
+                }
+                else
+                {
+                    physicalPath = Program.Options.WebRoot;
+                }
 
                 if (sanList == null || sanList.Count <= 100)
                 {
